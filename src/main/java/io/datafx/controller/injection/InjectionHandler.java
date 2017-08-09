@@ -1,6 +1,6 @@
 /**
- * Copyright (c) 2011, 2013, Jonathan Giles, Johan Vos, Hendrik Ebbers All rights reserved.
- * Copyright (c) 2017, Kirill Romanov All rights reserved.
+ * Copyright (c) 2011, 2013, Jonathan Giles, Johan Vos, Hendrik Ebbers All rights reserved. Copyright (c) 2017, Kirill
+ * Romanov All rights reserved.
  * <p>
  * Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
  * following conditions are met: * Redistributions of source code must retain the above copyright notice, this list of
@@ -20,6 +20,7 @@
 package io.datafx.controller.injection;
 
 import io.datafx.controller.context.AbstractContext;
+import io.datafx.controller.context.ApplicationContext;
 import io.datafx.controller.context.ViewContext;
 import io.datafx.controller.injection.provider.ContextProvider;
 import io.datafx.core.DataFXUtils;
@@ -92,7 +93,12 @@ public class InjectionHandler<U> {
         Class<T> cls = (Class<T>) bean.getClass();
         for (final Field field : DataFXUtils.getInheritedDeclaredFields(cls)) {
             if (field.isAnnotationPresent(Inject.class)) {
-                DataFXUtils.setPrivileged(field, bean, createProxy(field.getType()));
+                Object value = ApplicationContext.getInstance().getRegisteredObject(field.getType());
+                if (value == null) {
+                    value = createProxy(field.getType());
+                }
+
+                DataFXUtils.setPrivileged(field, bean, value);
             }
         }
     }
