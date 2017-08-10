@@ -33,7 +33,7 @@ public class InjectResourceType implements AnnotatedControllerResourceType<Injec
         try {
             Object resource = ApplicationContext.getInstance().getRegisteredObject(cls);
             if (resource == null) {
-                resource = new InjectionHandler<>(context).createProxy(cls);
+                resource = new InjectionHandler<>(context).getInstance(cls);
             }
 
             return resource;

@@ -24,14 +24,11 @@ import io.datafx.controller.context.ApplicationContext;
 import io.datafx.controller.context.ViewContext;
 import io.datafx.controller.injection.provider.ContextProvider;
 import io.datafx.core.DataFXUtils;
-import javassist.util.proxy.MethodHandler;
-import javassist.util.proxy.ProxyFactory;
 
 import javax.inject.Inject;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.*;
 
 
@@ -44,42 +41,16 @@ public class InjectionHandler<U> {
         this.viewContext = viewContext;
     }
 
-    private <T> T registerNewInstance(final Class<T> propertyClass, final AbstractContext context) throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
-        T instance = createNewInstance(propertyClass);
-        context.register(instance);
-        injectAllSupportedFields(instance);
-        return instance;
-    }
-
-    public <T> T createProxy(final Class<T> propertyClass) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+    public <T> T getInstance(final Class<T> propertyClass) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
         final AbstractContext context = getContextForClass(propertyClass);
-        T registeredObject = context.getRegisteredObject(propertyClass);
-        if (registeredObject == null) {
-            registeredObject = registerNewInstance(propertyClass, context);
+        T instance = context.getRegisteredObject(propertyClass);
+        if (instance == null) {
+            instance = createNewInstance(propertyClass);
+            context.register(instance);
+            injectAllSupportedFields(instance);
         }
 
-        final T innerObject = registeredObject;
-
-        ProxyFactory factory = new ProxyFactory();
-        factory.setSuperclass(propertyClass);
-
-
-        MethodHandler handler = new MethodHandler() {
-            @Override
-            public Object invoke(Object self, Method thisMethod, Method proceed, Object[] args) throws Throwable {
-                AbstractContext context = getContextForClass(propertyClass);
-                if (context.getRegisteredObject(propertyClass) == null) {
-                    registerNewInstance(propertyClass, context);
-                }
-                try {
-                    return thisMethod.invoke(innerObject, args);
-                } catch (InvocationTargetException e) {
-                    throw e.getCause();
-                }
-            }
-        };
-
-        return (T) factory.create(new Class<?>[0], new Object[0], handler);
+        return instance;
     }
 
     private <T> void injectAllSupportedFields(T bean) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -88,7 +59,7 @@ public class InjectionHandler<U> {
             if (field.isAnnotationPresent(Inject.class)) {
                 Object value = ApplicationContext.getInstance().getRegisteredObject(field.getType());
                 if (value == null) {
-                    value = createProxy(field.getType());
+                    value = getInstance(field.getType());
                 }
 
                 DataFXUtils.setPrivileged(field, bean, value);
@@ -114,7 +85,7 @@ public class InjectionHandler<U> {
         for (Class<?> parameterClass : annotatedConstructor.getParameterTypes()) {
             Object value = ApplicationContext.getInstance().getRegisteredObject(parameterClass);
             if (value == null) {
-                value = createProxy(parameterClass);
+                value = getInstance(parameterClass);
             }
             args.add(value);
         }
