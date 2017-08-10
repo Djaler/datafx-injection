@@ -32,8 +32,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Iterator;
-import java.util.ServiceLoader;
+import java.util.*;
 
 
 public class InjectionHandler<U> {
@@ -46,16 +45,10 @@ public class InjectionHandler<U> {
     }
 
     private <T> T registerNewInstance(final Class<T> propertyClass, final AbstractContext context) throws IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
-        for (Constructor<?> constructor : propertyClass.getConstructors()) {
-            if (constructor.getParameterCount() == 0) {
-                T instance = propertyClass.newInstance();
-                context.register(instance);
-                injectAllSupportedFields(instance);
-                return instance;
-            }
-        }
-        //TODO: Special Exception
-        throw new RuntimeException("No default constructor present!");
+        T instance = createNewInstance(propertyClass);
+        context.register(instance);
+        injectAllSupportedFields(instance);
+        return instance;
     }
 
     public <T> T createProxy(final Class<T> propertyClass) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -103,6 +96,38 @@ public class InjectionHandler<U> {
         }
     }
 
+    private <T> T createNewInstance(Class<T> cls) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        Constructor<?> annotatedConstructor = Arrays.stream(cls.getDeclaredConstructors())
+            .filter(constructor -> constructor.isAnnotationPresent(Inject.class))
+            .filter(constructor -> constructor.getParameterCount() > 0)
+            .sorted((c1, c2) -> {
+                int res = Integer.compare(c1.getModifiers(), c2.getModifiers());
+                return res != 0 ? res : Integer.compare(c2.getParameterCount(), c1.getParameterCount());
+            })
+            .findFirst().orElse(null);
+
+        if (annotatedConstructor == null) {
+            return cls.newInstance();
+        }
+
+        List<Object> args = new ArrayList<>();
+        for (Class<?> parameterClass : annotatedConstructor.getParameterTypes()) {
+            Object value = ApplicationContext.getInstance().getRegisteredObject(parameterClass);
+            if (value == null) {
+                value = createProxy(parameterClass);
+            }
+            args.add(value);
+        }
+
+        boolean wasAccessible = annotatedConstructor.isAccessible();
+        try {
+            annotatedConstructor.setAccessible(true);
+            return (T) annotatedConstructor.newInstance(args.toArray());
+        } finally {
+            annotatedConstructor.setAccessible(wasAccessible);
+        }
+    }
+
     private AbstractContext getContextForClass(Class<?> cls) {
         ServiceLoader<ContextProvider> contextProvidersLoader = ServiceLoader.load(ContextProvider.class);
         Iterator<ContextProvider> iterator = contextProvidersLoader.iterator();
@@ -116,5 +141,4 @@ public class InjectionHandler<U> {
 
         return DEPENDEND_CONTEXT;
     }
-
 }
